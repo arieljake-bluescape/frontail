@@ -280,13 +280,32 @@ window.App = (function app(window, document) {
     log: function log(data) {
       var wasScrolledBottom = _isScrolledBottom();
       var div = document.createElement('div');
-      var p = document.createElement('p');
+      var p = document.createElement('pre');
       p.className = 'inner-line';
 
       // convert ansi color codes to html && escape HTML tags
+      data = JSON.parse(data);
+      if (data.msg && data.msg[0] === '{') {
+        data = Object.assign({
+          _name: data.name,
+          _file: data.src.file,
+          _func: data.src.func
+        }, JSON.parse(data.msg));
+      }
+      else {
+        data = {
+          time: data.time,
+          name: data.name,
+          msg: data.msg,
+          file: data.src.file,
+          func: data.src.func
+        };
+      }
+      data = JSON.stringify(data, null, '  ');
       data = ansi_up.escape_for_html(data); // eslint-disable-line
       data = ansi_up.ansi_to_html(data); // eslint-disable-line
-      p.innerHTML = _highlightWord(data);
+      data = `\n${data}`;
+      p.innerText = _highlightWord(data);
 
       div.className = 'line';
       div = _highlightLine(data, div);
