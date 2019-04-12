@@ -34,7 +34,7 @@ body {
 }
 
 .log {
-  white-space: pre-wrap;
+  /* white-space: pre-wrap; */
   color: black;
   font-size: 0.85em;
   background: inherit;

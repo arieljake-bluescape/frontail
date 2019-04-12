@@ -277,14 +277,16 @@ window.App = (function app(window, document) {
      *
      * @param {string} data data to log
      */
-    log: function log(data) {
-      var wasScrolledBottom = _isScrolledBottom();
-      var div = document.createElement('div');
-      var p = document.createElement('pre');
-      p.className = 'inner-line';
+    log: function log(entry) {
+      let data = JSON.parse(entry);
 
-      // convert ansi color codes to html && escape HTML tags
-      data = JSON.parse(data);
+      // if (data.name.indexOf('bs.services') || data.name.indexOf('bs.worker')) {
+      //   return;
+      // }
+
+      const wasScrolledBottom = _isScrolledBottom();
+      let div = document.createElement('div');
+      
       if (data.msg && data.msg[0] === '{') {
         data = Object.assign({
           _name: data.name,
@@ -301,11 +303,24 @@ window.App = (function app(window, document) {
           func: data.src.func
         };
       }
-      data = JSON.stringify(data, null, '  ');
-      data = ansi_up.escape_for_html(data); // eslint-disable-line
-      data = ansi_up.ansi_to_html(data); // eslint-disable-line
-      data = `\n${data}`;
-      p.innerText = _highlightWord(data);
+      // data = JSON.stringify(data, null, '  ');
+      // data = ansi_up.escape_for_html(data); // eslint-disable-line
+      // data = ansi_up.ansi_to_html(data); // eslint-disable-line
+      // data = `\n${data}`;
+      const name = data.name || data._name;
+      const msg = data.msg || `<pre>${JSON.stringify(data, null, '  ')}</pre>`;
+
+      if (name.indexOf('bs.services.mq') >= 0
+        || name.indexOf('bs.worker') >= 0) {
+        return;
+      }
+
+      const item = `<div style="margin-left: 20px; border-bottom: 1px solid #666">
+<div style="font-size: 12px; font-weight: bold;">${name.split(':')[0].split('.')[2]}</div>
+<div style="font-size: 14px; margin-top: 1px;">${name.split(':')[0].split('.').pop()}</div>
+<div style="font-size: 16px; margin-top: 5px;">${msg}</div>
+</div>`;
+      div.innerHTML = _highlightWord(item);
 
       div.className = 'line';
       div = _highlightLine(data, div);
@@ -317,7 +332,6 @@ window.App = (function app(window, document) {
         }
       });
 
-      div.appendChild(p);
       _filterElement(div);
       _logContainer.appendChild(div);
 
