@@ -19,6 +19,14 @@ window.App = (function app(window, document) {
    * @type {HTMLElement}
    * @private
    */
+  var _flowContainer;
+  var _flows = {};
+  var _selectedFlow;
+
+  /**
+   * @type {HTMLElement}
+   * @private
+   */
   var _filterInput;
 
   /**
@@ -44,6 +52,7 @@ window.App = (function app(window, document) {
    * @private
    */
   var _linesLimit = Math.Infinity;
+  var _flowsLimit = 200;
 
   /**
    * @type {number}
@@ -203,6 +212,43 @@ window.App = (function app(window, document) {
     return container;
   };
 
+  var _selectFlow = function(flow) {
+    _selectedFlow = flow;
+    _refreshLog();
+    _logContainer.scrollTo(0, 0);
+  };
+
+  var _printLogEntry = function(data) {
+    const msg = data.msg || `<pre>${JSON.stringify(data, null, '  ')}</pre>`;
+    const itemDiv = document.createElement('div');
+    const item = `
+<div>
+<div style="font-size: 16px; margin-top: 5px;">${msg}</div>
+</div>`;
+    itemDiv.innerHTML = _highlightWord(item);
+
+    _filterElement(itemDiv);
+    _logContainer.appendChild(itemDiv);
+
+    // const wasScrolledBottom = _isScrolledBottom();
+
+    // if (wasScrolledBottom) {
+    //   window.scrollTo(0, document.body.scrollHeight);
+    // }
+
+    _updateFaviconCounter();
+  };
+
+  var _refreshLog = function() {
+    _logContainer.innerHTML = '';
+
+    if (!_selectedFlow) return;
+
+    _selectedFlow.entries.forEach((entry) => {
+      _printLogEntry(entry);
+    });
+  };
+
   return {
     /**
      * Init socket.io communication and log container
@@ -213,7 +259,8 @@ window.App = (function app(window, document) {
       var self = this;
 
       // Elements
-      _logContainer = opts.container;
+      _logContainer = opts.logContainer;
+      _flowContainer = opts.flowContainer;
       _filterInput = opts.filterInput;
       _filterInput.focus();
       _topbar = opts.topbar;
@@ -280,13 +327,6 @@ window.App = (function app(window, document) {
     log: function log(entry) {
       let data = JSON.parse(entry);
 
-      // if (data.name.indexOf('bs.services') || data.name.indexOf('bs.worker')) {
-      //   return;
-      // }
-
-      const wasScrolledBottom = _isScrolledBottom();
-      let div = document.createElement('div');
-      
       if (data.msg && data.msg[0] === '{') {
         data = Object.assign({
           _name: data.name,
@@ -308,42 +348,48 @@ window.App = (function app(window, document) {
       // data = ansi_up.ansi_to_html(data); // eslint-disable-line
       // data = `\n${data}`;
       const name = data.name || data._name;
-      const msg = data.msg || `<pre>${JSON.stringify(data, null, '  ')}</pre>`;
+      const id = name.substr(name.indexOf(':') + 1);
 
-      if (name.indexOf('bs.services.mq') >= 0
+      if (!id || /\d{4}\-/.test(id) === false || name.indexOf('bs.services.mq') >= 0
         || name.indexOf('bs.worker') >= 0) {
         return;
       }
 
-      const item = `<div style="margin-left: 20px; border-bottom: 1px solid #666">
-<div style="font-size: 12px; font-weight: bold;">${name.split(':')[0].split('.')[2]}</div>
-<div style="font-size: 14px; margin-top: 1px;">${name.split(':')[0].split('.').pop()}</div>
-<div style="font-size: 16px; margin-top: 5px;">${msg}</div>
+      let flow = _flows[id];
+
+      if (!flow) {
+        flow = {
+          id,
+          entries: []
+        };
+
+        flow.div = document.createElement('div');
+        flow.div.setAttribute('data-id', id);
+        flow.div.style.margin = '10px';
+        flow.div.style.borderBottom = '1px solid #666';
+        flow.div.style.cursor = 'pointer';
+        flow.div.innerHTML = `
+        <div>${id}</div>
+<div style="font-size: 12px;">
+  <span>${name.split(':')[0]}</span>
 </div>`;
-      div.innerHTML = _highlightWord(item);
+        flow.div.addEventListener('click', function() {
+          _selectFlow(flow);
+        });
 
-      div.className = 'line';
-      div = _highlightLine(data, div);
-      div.addEventListener('click', function click() {
-        if (this.className.indexOf('selected') === -1) {
-          this.className = 'line-selected';
-        } else {
-          this.className = 'line';
+        _flowContainer.appendChild(flow.div);
+        if (_flowContainer.children.length > _flowsLimit) {
+          _flowContainer.removeChild(_flowContainer.children[0]);
         }
-      });
 
-      _filterElement(div);
-      _logContainer.appendChild(div);
-
-      if (_logContainer.children.length > _linesLimit) {
-        _logContainer.removeChild(_logContainer.children[0]);
+        _flows[id] = flow;
       }
 
-      if (wasScrolledBottom) {
-        window.scrollTo(0, document.body.scrollHeight);
-      }
+      flow.entries.push(data);
 
-      _updateFaviconCounter();
+      if (_selectedFlow && flow.id === _selectedFlow.id) {
+        _printLogEntry(data);
+      }
     }
   };
 }(window, document));

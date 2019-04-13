@@ -10,7 +10,7 @@
 </head>
 
 <body>
-    <nav class="topbar navbar navbar-inverse navbar-fixed-top" role="navigation">
+    <nav class="navbar sticky-top navbar-dark bg-dark" role="navigation">
         <div class="container-fluid">
             <div class="row">
                 <div class="col-sm-10">
@@ -25,8 +25,15 @@
         </div>
     </nav>
 
-    <div class="container-fluid no-horiz-padding">
-        <div class="log"></div>
+    <div class="container-fluid no-horiz-padding h-100">
+        <div class="row h-100">
+            <div class="col-sm-2 h-100" style="position: relative;">
+                <div class="flows" style="position: absolute; top: 0; bottom: 0; left: 0; right: 0; overflow-x: hidden; overflow-y: scroll;"></div>
+            </div>
+            <div class="col-sm-10 h-100" style="position: relative;">
+                <div class="log" style="position: absolute; top: 0; bottom: 0; left: 0; right: 0; overflow-x: hidden; overflow-y: scroll;"></div>
+            </div>
+        </div>
     </div>
 
 
@@ -41,7 +48,8 @@
 
         window.load = App.init({
             socket: socket,
-            container: document.getElementsByClassName('log')[0],
+            logContainer: document.getElementsByClassName('log')[0],
+            flowContainer: document.getElementsByClassName('flows')[0],
             filterInput: document.getElementsByClassName('query')[0],
             topbar: document.getElementsByClassName('topbar')[0],
             body: document.getElementsByTagName('body')[0]
