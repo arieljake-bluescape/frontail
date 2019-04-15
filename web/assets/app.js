@@ -217,8 +217,8 @@ window.App = (function app(window, document) {
     _flowContainer.innerHTML = '';
 
     const flows = Object.values(_flows).sort((f1, f2) => {
-      if (f1.id < f2.id) return -1;
-      if (f2.id < f1.id) return 1;
+      if (f1.id > f2.id) return -1;
+      if (f2.id > f1.id) return 1;
       return 0;
     });
     
@@ -365,6 +365,10 @@ window.App = (function app(window, document) {
       } else if (data.data) {
         logData = {
           data: data.data
+        };
+      } else if (data.error) {
+        logData = {
+          error: data.error
         };
       } else {
         logData = {
