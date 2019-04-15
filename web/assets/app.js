@@ -28,12 +28,14 @@ window.App = (function app(window, document) {
    * @private
    */
   var _filterInput;
+  var _minTimeInput;
 
   /**
    * @type {String}
    * @private
    */
-  var _filterValue = '';
+  var _filterValue = null;
+  var _minTimeValue = '';
 
   /**
    * @type {HTMLElement}
@@ -73,43 +75,6 @@ window.App = (function app(window, document) {
   var _highlightConfig;
 
   /**
-   * Hide element if doesn't contain filter value
-   *
-   * @param {Object} element
-   * @private
-   */
-  var _filterElement = function(elem) {
-    var pattern = new RegExp(_filterValue, 'i');
-    var element = elem;
-    if (pattern.test(element.textContent)) {
-      element.style.display = '';
-    } else {
-      element.style.display = 'none';
-    }
-  };
-
-  /**
-   * Filter logs based on _filterValue
-   *
-   * @function
-   * @private
-   */
-  var _filterLogs = function() {
-    var collection = _logContainer.childNodes;
-    var i = collection.length;
-
-    if (i === 0) {
-      return;
-    }
-
-    while (i) {
-      _filterElement(collection[i - 1]);
-      i -= 1;
-    }
-    window.scrollTo(0, document.body.scrollHeight);
-  };
-
-  /**
    * Set _filterValue from URL parameter `filter`
    *
    * @function
@@ -146,12 +111,12 @@ window.App = (function app(window, document) {
    * @return {Boolean}
    * @private
    */
-  var _isScrolledBottom = function() {
-    var currentScroll = document.documentElement.scrollTop || document.body.scrollTop;
-    var totalHeight = document.body.offsetHeight;
-    var clientHeight = document.documentElement.clientHeight; // eslint-disable-line
-    return totalHeight <= currentScroll + clientHeight;
-  };
+  // var _isScrolledBottom = function() {
+  //   var currentScroll = document.documentElement.scrollTop || document.body.scrollTop;
+  //   var totalHeight = document.body.offsetHeight;
+  //   var clientHeight = document.documentElement.clientHeight; // eslint-disable-line
+  //   return totalHeight <= currentScroll + clientHeight;
+  // };
 
   /**
    * @return void
@@ -200,43 +165,83 @@ window.App = (function app(window, document) {
    * @return HTMLElement
    * @private
    */
-  var _highlightLine = function(line, container) {
-    if (_highlightConfig && _highlightConfig.lines) {
-      Object.keys(_highlightConfig.lines).forEach((lineCheck) => {
-        if (line.indexOf(lineCheck) !== -1) {
-          container.setAttribute('style', _highlightConfig.lines[lineCheck]);
-        }
-      });
+  // var _highlightLine = function(line, container) {
+  //   if (_highlightConfig && _highlightConfig.lines) {
+  //     Object.keys(_highlightConfig.lines).forEach((lineCheck) => {
+  //       if (line.indexOf(lineCheck) !== -1) {
+  //         container.setAttribute('style', _highlightConfig.lines[lineCheck]);
+  //       }
+  //     });
+  //   }
+
+  //   return container;
+  // };
+
+  var _filterLogEntries = function(data) {
+    if (/\d{4}-/.test(data._flowId) === false
+      || data._name.indexOf('bs.services.mq') >= 0
+      || data._name.indexOf('bs.worker') >= 0) {
+      return false;
     }
 
-    return container;
+    if (_filterValue) {
+      return _filterValue.test(data._entry);
+    }
+
+    return true;
   };
 
-  var _selectFlow = function(flow) {
-    _selectedFlow = flow;
-    _refreshLog();
-    _logContainer.scrollTo(0, 0);
-  };
+  var _filterFlows = function(flow) {
+    if (_minTimeValue) {
+      return flow.id >= _minTimeValue;
+    }
+    
+    return true;
+  }
 
   var _printLogEntry = function(data) {
-    const msg = data.msg || `<pre>${JSON.stringify(data, null, '  ')}</pre>`;
+    // data = ansi_up.escape_for_html(data); // eslint-disable-line
+    // data = ansi_up.ansi_to_html(data); // eslint-disable-line
+
+    const msg = JSON.stringify(data, null, '  ');
     const itemDiv = document.createElement('div');
     const item = `
 <div>
-<div style="font-size: 16px; margin-top: 5px;">${msg}</div>
+<div style="font-size: 16px; margin-top: 5px;"><pre>${msg}</pre></div>
 </div>`;
     itemDiv.innerHTML = _highlightWord(item);
-
-    _filterElement(itemDiv);
     _logContainer.appendChild(itemDiv);
+  };
 
-    // const wasScrolledBottom = _isScrolledBottom();
+  var _refreshFlows = function() {
+    _flowContainer.innerHTML = '';
 
-    // if (wasScrolledBottom) {
-    //   window.scrollTo(0, document.body.scrollHeight);
-    // }
+    const flows = Object.values(_flows).sort((f1, f2) => {
+      if (f1.id < f2.id) return -1;
+      if (f2.id < f1.id) return 1;
+      return 0;
+    });
+    
+    flows
+      .filter(_filterFlows)
+      .forEach((flow) => {
+        const flowDiv = document.createElement('div');
+        flowDiv.setAttribute('data-id', flow.id);
+        flowDiv.style.margin = '10px';
+        flowDiv.style.borderBottom = '1px solid #666';
+        flowDiv.style.cursor = 'pointer';
+        flowDiv.innerHTML = `
+        <div>${flow.id}</div>
+  <div style="font-size: 12px;">
+  <div>${flow.entries[0]._name.split(':')[0].split('.').slice(-2, -1).pop()}</div>
+  <div style="font-weight: bold">${flow.entries[0]._name.split(':')[0].split('.').slice(-1).pop()}</div>
+  </div>`;
+        flowDiv.addEventListener('click', function() {
+          _selectFlow(flow);
+        });
 
-    _updateFaviconCounter();
+        _flowContainer.appendChild(flowDiv);
+      });
   };
 
   var _refreshLog = function() {
@@ -244,9 +249,20 @@ window.App = (function app(window, document) {
 
     if (!_selectedFlow) return;
 
-    _selectedFlow.entries.forEach((entry) => {
-      _printLogEntry(entry);
-    });
+    _selectedFlow.entries
+      .filter(_filterLogEntries)
+      .forEach((entry) => {
+        _printLogEntry(entry);
+      });
+
+    _updateFaviconCounter();
+  };
+
+  var _selectFlow = function(flow) {
+    _selectedFlow = flow;
+    _refreshLog();
+    _refreshFlows();
+    _logContainer.scrollTo(0, 0);
   };
 
   return {
@@ -262,23 +278,35 @@ window.App = (function app(window, document) {
       _logContainer = opts.logContainer;
       _flowContainer = opts.flowContainer;
       _filterInput = opts.filterInput;
-      _filterInput.focus();
+      _minTimeInput = opts.minTimeInput;
       _topbar = opts.topbar;
       _body = opts.body;
 
-      _setFilterValueFromURL(_filterInput, window.location.toString());
+      // _setFilterValueFromURL(_filterInput, window.location.toString());
 
       // Filter input bind
       _filterInput.addEventListener('keyup', function(e) {
         // ESC
         if (e.keyCode === 27) {
           this.value = '';
-          _filterValue = '';
+          _filterValue = null;
         } else {
-          _filterValue = this.value;
+          _filterValue = new RegExp(this.value, 'i');
         }
-        _setFilterParam(_filterValue, window.location.toString());
-        _filterLogs();
+        // _setFilterParam(this.value, window.location.toString());
+        _refreshLog();
+      });
+      
+      _minTimeInput.addEventListener('keyup', function(e) {
+        // ESC
+        if (e.keyCode === 27) {
+          this.value = '';
+          _minTimeValue = '';
+        } else {
+          _minTimeValue = this.value;
+        }
+        // _setFilterParam(_minTimeValue, window.location.toString());
+        _refreshFlows();
       });
 
       // Favicon counter bind
@@ -325,70 +353,56 @@ window.App = (function app(window, document) {
      * @param {string} data data to log
      */
     log: function log(entry) {
-      let data = JSON.parse(entry);
+      const data = JSON.parse(entry);
+      let logData;
 
       if (data.msg && data.msg[0] === '{') {
-        data = Object.assign({
-          _name: data.name,
-          _file: data.src.file,
-          _func: data.src.func
-        }, JSON.parse(data.msg));
-      }
-      else {
-        data = {
-          time: data.time,
-          name: data.name,
-          msg: data.msg,
-          file: data.src.file,
-          func: data.src.func
+        logData = JSON.parse(data.msg);
+      } else if (data.event) {
+        logData = {
+          event: data.event
+        };
+      } else if (data.data) {
+        logData = {
+          data: data.data
+        };
+      } else {
+        logData = {
+          msg: data.msg
         };
       }
-      // data = JSON.stringify(data, null, '  ');
-      // data = ansi_up.escape_for_html(data); // eslint-disable-line
-      // data = ansi_up.ansi_to_html(data); // eslint-disable-line
-      // data = `\n${data}`;
-      const name = data.name || data._name;
-      const id = name.substr(name.indexOf(':') + 1);
 
-      if (!id || /\d{4}\-/.test(id) === false || name.indexOf('bs.services.mq') >= 0
-        || name.indexOf('bs.worker') >= 0) {
+      Object.assign(logData, {
+        _time: data.time,
+        _name: data.name || data._name,
+        _file: data.src ? data.src.file : null,
+        _func: data.src ? data.src.func : null,
+        _entry: entry
+      });
+
+      if (!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/.exec(logData._name)) {
         return;
       }
 
-      let flow = _flows[id];
+      logData._flowId = logData._name.substr(logData._name.indexOf(':') + 1);
+
+      let flow = _flows[logData._flowId];
 
       if (!flow) {
         flow = {
-          id,
-          entries: []
+          id: logData._flowId,
+          entries: [logData]
         };
 
-        flow.div = document.createElement('div');
-        flow.div.setAttribute('data-id', id);
-        flow.div.style.margin = '10px';
-        flow.div.style.borderBottom = '1px solid #666';
-        flow.div.style.cursor = 'pointer';
-        flow.div.innerHTML = `
-        <div>${id}</div>
-<div style="font-size: 12px;">
-  <span>${name.split(':')[0]}</span>
-</div>`;
-        flow.div.addEventListener('click', function() {
-          _selectFlow(flow);
-        });
-
-        _flowContainer.appendChild(flow.div);
-        if (_flowContainer.children.length > _flowsLimit) {
-          _flowContainer.removeChild(_flowContainer.children[0]);
-        }
-
-        _flows[id] = flow;
+        _flows[logData._flowId] = flow;
+        _refreshFlows();
+      }
+      else {
+        flow.entries.push(logData);
       }
 
-      flow.entries.push(data);
-
       if (_selectedFlow && flow.id === _selectedFlow.id) {
-        _printLogEntry(data);
+        _printLogEntry(logData);
       }
     }
   };
